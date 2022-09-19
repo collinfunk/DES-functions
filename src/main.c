@@ -25,52 +25,60 @@ uint8_t KEY_ROTATIONS[16] = {
 };
 
 void get_sub_keys(uint8_t* original_key, uint8_t sub_keys[16][48]) {
-    // 1. 56 bit key goes through the inverse of PC2 to produce a 56 bit key.
-    uint8_t key[56];
-    for (int i = 0; i < 56; i++) {
-        // PC2 inverse
-        key[i] = original_key[PC2[i] - 1];
-    }
+    // Assume that we have a 56 bit key already and don't need to compress it from 64 bits
 
-    // 2. 56 bit key is split into two 28 bit halves.
+    //split the key into two halves
     uint8_t left[28];
     uint8_t right[28];
     for (int i = 0; i < 28; i++) {
-        left[i] = key[i];
-        // right half = top indeces of key
-        right[i] = key[i + 28];
+        left[i] = original_key[i];
+        right[i] = original_key[i + 28];
     }
 
-    // 3. Each 28 bit half is rotated right by a different amount.
-    // 4. The two 28 bit halves are concatenated to form a 56 bit key.
-    uint8_t rotated_left[28];
-    uint8_t rotated_right[28];
+    //rotate the halves the right based off of the KEY_ROTATIONS array
     for (int i = 0; i < 16; i++) {
-        // rotate left
+        // temp arrays
+        uint8_t left_temp = left[0];
+        uint8_t right_temp = right[0];
+
+        // roate halves
+        for (int j = 0; j < 27; j++) {
+            left[j] = left[j + 1];
+            right[j] = right[j + 1];
+        }
+
+        // set arrays
+        left[27] = left_temp;
+        right[27] = right_temp;
+
+        // if the rotation is 2, rotate again
+        if (KEY_ROTATIONS[i] == 2) {
+            left_temp = left[0];
+            right_temp = right[0];
+            for (int j = 0; j < 27; j++) {
+                left[j] = left[j + 1];
+                right[j] = right[j + 1];
+            }
+
+            // set arrays
+            left[27] = left_temp;
+            right[27] = right_temp;
+        }
+
+        //combine the halves
+        uint8_t combined[56];
         for (int j = 0; j < 28; j++) {
-            // if key rotation is 1, rotate by 1
-            // if key rotation is 2, rotate by 2
-            rotated_left[j] = left[(j + KEY_ROTATIONS[i]) % 28];
-            rotated_right[j] = right[(j + KEY_ROTATIONS[i]) % 28];
+            combined[j] = left[j];
+            combined[j + 28] = right[j];
         }
 
-        // 5. The 56 bit key goes through the inverse of PC1 to produce a 56 bit key.
-        uint8_t subkey[56];
-        for (int j = 0; j < 28; j++) {
-            subkey[j] = rotated_left[j];
-            subkey[j + 28] = rotated_right[j];
-        }
-
-        uint8_t subkey_48[48];
+        //compress the combined halves
         for (int j = 0; j < 48; j++) {
-            subkey_48[j] = subkey[PC1[j] - 1];
-        }
-
-        // copy subkey_48 into sub_keys
-        for (int j = 0; j < 48; j++) {
-            sub_keys[i][j] = subkey_48[j];
+            sub_keys[i][j] = combined[PC2[j]];
         }
     }
+    
+    // finished
 }
 
 int main (int argc, char** argv) {
@@ -89,6 +97,36 @@ int main (int argc, char** argv) {
         }
         printf("\n");
     }
+
+    // count the amount of times each bit is used
+    uint8_t bit_count[56];
+    for (int i = 0; i < 56; i++) {
+        bit_count[i] = 0;
+    }
+
+    // for subkey
+    for (int i = 0; i < 16; i++) {
+        // for bit
+        for (int j = 0; j < 48; j++) {
+            // incremet bitcounter by one for that bit
+            bit_count[subkeys[i][j]]++;
+        }
+    }
+
+    for (int i = 0; i < 56; i++) {
+        if (i == 55) {
+            printf("k%d: %d", i, bit_count[i]);
+        }
+        else if (i % 7 == 0 && i != 0) {
+            printf("k%d: %d\n", i, bit_count[i]);
+        }
+        else {
+            printf("k%d: %d, ", i, bit_count[i]);
+        }
+        
+    }
+
+    printf("\n");
     return 0;
 }
 
